@@ -47,7 +47,7 @@ function getInspeccionesSheet(crear) {
       "Estado Carrocería","Vidrios","Puertas","Tapicería Interior",
       "SOAT Estado","RCC Estado","RCE Estado","RTM Vigente",
       "Observaciones Generales","Zonas con Daño","Fecha Venc. Extintor",
-      "Foto_Evidencia_URL","Foto_Evidencia_Nombre","Resultado Final",
+      "Foto_Evidencia_URL","Resultado Final",
       "Es_Electrico","Nivel_Carga_Pct",
       "check_bateria_estado","check_puerto_carga","check_cable_carga",
       "check_refrig_bateria","check_freno_regen","check_dashboard_warn",
@@ -90,6 +90,10 @@ function guardarInspeccion(data) {
     const fotoRes = guardarFotoEvidencia(data.fotoEvidencia, idInsp, data.placa || '');
     fotoUrl    = fotoRes.url    || '';
     fotoNombre = fotoRes.nombre || '';
+    // Si la subida falló, registrar el error visible en la URL para diagnóstico
+    if (!fotoUrl && fotoNombre && fotoNombre.indexOf('ERROR:') === 0) {
+      fotoUrl = fotoNombre;
+    }
   }
 
   let firmaUrl = '', firmaConductorUrl = '';
@@ -137,7 +141,7 @@ function guardarInspeccion(data) {
     data.rce_estado||"",  data.rtm_vigente||"",
     data.observaciones||"", data.zonasDanio||"",
     data.fechaVencExtinguidor||"",
-    fotoUrl, fotoNombre, data.resultado||"",
+    fotoUrl, data.resultado||"",
     data.esElectrico||"NO", data.nivelCarga||"",
     data.check_bateria_estado||"N/A", data.check_puerto_carga||"N/A",
     data.check_cable_carga||"N/A",    data.check_refrig_bateria||"N/A",

@@ -1453,7 +1453,8 @@ function enviarFormulario(){
   google.script.run
     .withSuccessHandler(function(res){
       if(res && res.ok){
-        mostrarExito(res.id||'', res.fotoUrl||'', res.fotoNombre||'');
+        const nombre = (res.id||'') + '_' + placa + '_evidencia.jpg';
+        mostrarExito(res.id||'', res.fotoUrl||'', nombre);
         btn.disabled=false; btn.textContent='💾 Guardar Inspección';
       } else {
         showToast('Error: '+((res&&res.error)||'desconocido'),'err');
@@ -1696,24 +1697,25 @@ function escHtml(s){
 }
 
 function construirFotoHTML(insp){
-  const fotoVal     = insp['Foto_Evidencia_URL']    || '';
-  const fotoNombre  = insp['Foto_Evidencia_Nombre'] || '';
+  const fotoVal  = insp['Foto_Evidencia_URL'] || '';
+
+  // Caso error: el server escribió "ERROR: ..." en el campo URL
+  if(fotoVal && fotoVal.indexOf('ERROR:') === 0){
+    return '<div style="padding:12px;background:var(--nok-bg);color:var(--nok);border:1px solid var(--nok);border-radius:8px;font-size:13px;">⚠️ Foto no subida — '+escHtml(fotoVal)+'</div>';
+  }
 
   if(!fotoVal || fotoVal.indexOf('https') !== 0){
-    if(fotoNombre && fotoNombre.indexOf('ERROR:') === 0){
-      return '<div style="padding:12px;background:var(--nok-bg);color:var(--nok);border:1px solid var(--nok);border-radius:8px;font-size:13px;">⚠️ '+escHtml(fotoNombre)+'</div>';
-    }
-    return '<div style="color:var(--muted);font-size:13px;">Sin foto de evidencia</div>';
+    return '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0;font-style:italic;">Sin foto de evidencia</div>';
   }
 
   const idMatch  = fotoVal.match(/id=([^&]+)/);
   const fileId   = idMatch ? idMatch[1] : '';
   const viewUrl  = fileId ? 'https://drive.google.com/file/d/' + fileId + '/view' : fotoVal;
   const thumbUrl = fileId ? 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w1200' : fotoVal;
-  const nombre   = fotoNombre || ((insp['ID_Inspeccion']||'') + '_' + (insp['Placa']||'') + '_evidencia.jpg');
+  const nombre   = (insp['ID_Inspeccion']||'') + '_' + (insp['Placa']||'') + '_evidencia.jpg';
 
   return (
-    '<div style="margin-bottom:10px;">' +
+    '<div style="margin-bottom:12px;">' +
       '<a href="' + escHtml(viewUrl) + '" target="_blank" rel="noopener">' +
         '<img src="' + escHtml(thumbUrl) + '" alt="Foto evidencia" ' +
           'style="width:100%;max-height:320px;object-fit:contain;border-radius:8px;border:1.5px solid var(--border);background:#f8f7ff;cursor:pointer;">' +
@@ -1722,9 +1724,11 @@ function construirFotoHTML(insp){
     '<div class="foto-info-box">' +
       '<span class="icon">📄</span>' +
       '<div class="info">' +
+        '<div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Nombre del archivo</div>' +
         '<div class="nombre">' + escHtml(nombre) + '</div>' +
+        '<div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:6px 0 2px;">URL en Drive</div>' +
         '<div class="url">' + escHtml(viewUrl) + '</div>' +
-        '<a class="ver-drive" href="' + escHtml(viewUrl) + '" target="_blank" rel="noopener">📥 Ver en Drive</a>' +
+        '<a class="ver-drive" href="' + escHtml(viewUrl) + '" target="_blank" rel="noopener" style="margin-top:6px;">📥 Abrir en Drive</a>' +
       '</div>' +
     '</div>'
   );
@@ -1832,6 +1836,15 @@ function verDetalleInspeccion(idx){
 
   const fotoHTML = construirFotoHTML(insp);
 
+  function firmaImgHTML(b64){
+    if(!b64) return '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px 0;font-style:italic;">Sin firma registrada</div>';
+    return '<img src="'+escHtml(b64)+'" style="width:100%;max-height:180px;object-fit:contain;background:#fff;border-radius:6px;">';
+  }
+  const firmaInsp = insp['Firma_Base64'] || '';
+  const firmaCond = insp['Firma_Conductor_Base64'] || '';
+
+  const observaciones = insp['Observaciones Generales'] || '';
+
   det.innerHTML = `
     <div class="card" style="margin-top:12px;">
       <div class="card-header"><span class="card-icon">📋</span><span class="card-title">Detalle ${escHtml(insp['ID_Inspeccion']||'')}</span></div>
@@ -1839,8 +1852,7 @@ function verDetalleInspeccion(idx){
         <div style="background:${resColor};color:${resTxt};padding:14px 18px;border-radius:8px;font-weight:700;text-align:center;font-size:16px;margin-bottom:16px;">
           ${resEmoji} ${resultado}
         </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">Placa</div><div style="font-weight:700;font-family:'DM Mono',monospace;">${escHtml(insp['Placa']||'—')}</div></div>
           <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">Fecha</div><div>${escHtml(insp['Fecha']||'—')} ${escHtml(insp['Hora']||'')}</div></div>
           <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">Vehículo</div><div>${escHtml(insp['Marca']||'')} ${escHtml(insp['Modelo']||'')}</div></div>
@@ -1848,26 +1860,59 @@ function verDetalleInspeccion(idx){
           <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">Inspector</div><div>${escHtml(insp['Nombre Inspector']||'—')}</div></div>
           <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">Conductor</div><div>${escHtml(insp['Conductor del Día']||'—')}</div></div>
         </div>
-
         ${nivelCargaHTML}
+      </div>
+    </div>
 
-        <h3 style="font-size:12px;color:var(--cabify);margin:18px 0 10px;text-transform:uppercase;font-weight:700;">📷 Foto de Evidencia</h3>
-        <div style="margin-bottom:18px;">${fotoHTML}</div>
+    <div class="card">
+      <div class="card-header"><span class="card-icon">✅</span><span class="card-title">Checklist</span></div>
+      <div class="card-body">${checkHTML}</div>
+    </div>
 
-        <h3 style="font-size:12px;color:var(--cabify);margin:18px 0 10px;text-transform:uppercase;font-weight:700;">✅ Checklist</h3>
-        <div style="margin-bottom:18px;">${checkHTML}</div>
+    ${hasMarks ? '<div class="card"><div class="card-header"><span class="card-icon">🗺️</span><span class="card-title">Mapa de Daños</span></div><div class="card-body">'+mapHTML+'</div></div>' : ''}
 
-        ${hasMarks ? '<h3 style="font-size:12px;color:var(--cabify);margin:18px 0 10px;text-transform:uppercase;font-weight:700;">🗺️ Mapa de Daños</h3><div style="margin-bottom:18px;">'+mapHTML+'</div>' : ''}
-
-        ${insp['Observaciones Generales'] ? '<h3 style="font-size:12px;color:var(--cabify);margin:18px 0 10px;text-transform:uppercase;font-weight:700;">📝 Observaciones</h3><div style="padding:12px;background:var(--bg);border-radius:8px;font-size:14px;margin-bottom:18px;">'+escHtml(insp['Observaciones Generales'])+'</div>' : ''}
-
-        <div style="text-align:center;margin-top:20px;">
-          <button onclick="document.getElementById('hist-detalle').style.display='none';window.scrollTo(0,0);"
-            style="padding:10px 28px;background:var(--cabify);color:#fff;border:none;border-radius:50px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;">
-            ← Volver a la lista
-          </button>
+    <div class="card">
+      <div class="card-header"><span class="card-icon">✍️</span><span class="card-title">Firmas</span></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Inspector</div>
+            <div style="border:1.5px solid var(--border);border-radius:8px;padding:8px;min-height:100px;display:flex;align-items:center;justify-content:center;background:#fff;">
+              ${firmaImgHTML(firmaInsp)}
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Conductor</div>
+            <div style="border:1.5px solid var(--border);border-radius:8px;padding:8px;min-height:100px;display:flex;align-items:center;justify-content:center;background:#fff;">
+              ${firmaImgHTML(firmaCond)}
+            </div>
+          </div>
         </div>
       </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-icon">📷</span><span class="card-title">Foto de Evidencia</span></div>
+      <div class="card-body">${fotoHTML}</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-icon">📊</span><span class="card-title">Resultado</span></div>
+      <div class="card-body">
+        <div style="background:${resColor};color:${resTxt};padding:16px 20px;border-radius:8px;font-weight:700;text-align:center;font-size:18px;margin-bottom:14px;">
+          ${resEmoji} ${resultado}
+        </div>
+        ${observaciones
+          ? '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Observaciones</div><div style="padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:14px;line-height:1.5;">'+escHtml(observaciones)+'</div>'
+          : '<div style="color:var(--muted);font-size:14px;text-align:center;font-style:italic;">Sin observaciones</div>'}
+      </div>
+    </div>
+
+    <div style="text-align:center;margin:20px 0 30px;">
+      <button onclick="document.getElementById('hist-detalle').style.display='none';window.scrollTo(0,0);"
+        style="padding:12px 32px;background:var(--cabify);color:#fff;border:none;border-radius:50px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;">
+        ← Volver a la lista
+      </button>
     </div>
   `;
 
@@ -1885,14 +1930,16 @@ function mostrarExito(id, fotoUrl, fotoNombre){
       '<div class="foto-info-box">' +
         '<span class="icon">📄</span>' +
         '<div class="info">' +
+          '<div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px;">Nombre</div>' +
           '<div class="nombre">' + escHtml(fotoNombre||'evidencia.jpg') + '</div>' +
+          '<div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin:6px 0 2px;">URL</div>' +
           '<div class="url">' + escHtml(fotoUrl) + '</div>' +
-          '<a class="ver-drive" href="' + escHtml(fotoUrl) + '" target="_blank" rel="noopener">📥 Ver en Drive</a>' +
+          '<a class="ver-drive" href="' + escHtml(fotoUrl) + '" target="_blank" rel="noopener" style="margin-top:6px;">📥 Abrir en Drive</a>' +
         '</div>' +
       '</div>';
-  } else if(fotoNombre && fotoNombre.indexOf('ERROR:')===0){
+  } else if(fotoUrl && fotoUrl.indexOf('ERROR:')===0){
     info.style.display = 'block';
-    info.innerHTML = '<div style="padding:10px;background:var(--nok-bg);color:var(--nok);border:1px solid var(--nok);border-radius:8px;font-size:12px;">⚠️ Foto no guardada: '+escHtml(fotoNombre)+'</div>';
+    info.innerHTML = '<div style="padding:10px;background:var(--nok-bg);color:var(--nok);border:1px solid var(--nok);border-radius:8px;font-size:12px;">⚠️ Foto no guardada: '+escHtml(fotoUrl)+'</div>';
   } else {
     info.style.display = 'none';
     info.innerHTML = '';
