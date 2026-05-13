@@ -1842,26 +1842,76 @@ function verDetalleInspeccion(idx){
   }
   const firmaInsp = insp['Firma_Base64'] || '';
   const firmaCond = insp['Firma_Conductor_Base64'] || '';
-
   const observaciones = insp['Observaciones Generales'] || '';
 
+  function docBox(label, val){
+    const v = String(val||'').trim();
+    const bad = v==='' || /^(no|false|0)$/i.test(v) || /^no\s|inactiv|vencid|no vigente|suspendid|cancelad|anulad|terminad/i.test(v);
+    const color = bad ? 'var(--nok)' : 'var(--ok)';
+    const bg    = bad ? '#fff' : '#fff';
+    const display = v==='' ? '—' : v.toUpperCase();
+    return '<div style="border:2px solid '+color+';border-radius:10px;padding:14px 16px;background:'+bg+';">' +
+      '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">'+escHtml(label)+'</div>' +
+      '<div style="font-family:\'DM Sans\',sans-serif;font-size:18px;font-weight:700;color:'+color+';">'+escHtml(display)+'</div>' +
+    '</div>';
+  }
+
+  const docsHTML =
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+      docBox('SOAT Estado',  insp['SOAT Estado']) +
+      docBox('RCC Estado',   insp['RCC Estado']) +
+      docBox('RCE Estado',   insp['RCE Estado']) +
+      docBox('RTM Vigente',  insp['RTM Vigente']) +
+    '</div>';
+
+  // Mapa de daños siempre visible con las 4 vistas (replica el preoperacional PDF)
+  const mapaAlwaysHTML = H_VIEW_KEYS.map(function(vid){
+    const marks = parsedMarks[vid]||[];
+    const src   = H_IMGS[vid]||'';
+    return '<div style="margin-bottom:14px;">' +
+      '<div style="font-size:var(--font-xs);font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">'+H_VIEW_LABELS[vid]+'</div>' +
+      '<div style="position:relative;display:block;width:100%;">' +
+        '<img id="himg-'+vid+'" src="'+src+'" style="width:100%;height:auto;display:block;border-radius:var(--radius-sm);background:#f8f7ff;">' +
+        '<svg id="hsvg-'+vid+'" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;"></svg>' +
+      '</div>' +
+      (marks.length>0
+        ? '<div style="margin-top:6px;">'+marks.map(function(m){
+            return '<div style="font-size:var(--font-xs);color:var(--nok);padding:2px 0;">● #'+m.num+(m.desc?' — '+escHtml(m.desc):'')+'</div>';
+          }).join('')+'</div>'
+        : '') +
+    '</div>';
+  }).join('');
+
+  const ciudadKm = (insp['Ciudad']||'—') + ' · ' + (insp['Kilometraje actual']||'—') + ' km';
+  const placaTxt = escHtml(insp['Placa']||'');
+  const vehTxt   = [insp['Marca']||'', insp['Modelo']||'', insp['Año']||'', insp['Color']||''].filter(Boolean).join(' · ');
+
   det.innerHTML = `
-    <div class="card" style="margin-top:12px;">
-      <div class="card-header"><span class="card-icon">📋</span><span class="card-title">Detalle ${escHtml(insp['ID_Inspeccion']||'')}</span></div>
-      <div class="card-body">
-        <div style="background:${resColor};color:${resTxt};padding:14px 18px;border-radius:8px;font-weight:700;text-align:center;font-size:16px;margin-bottom:16px;">
-          ${resEmoji} ${resultado}
+    <div class="card" style="margin-top:12px;overflow:hidden;">
+      <div style="background:var(--cabify);color:#fff;padding:18px 22px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+        <div style="min-width:0;">
+          <div style="font-family:'DM Mono',monospace;font-size:24px;font-weight:700;letter-spacing:3px;">${placaTxt}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:2px;text-transform:uppercase;letter-spacing:0.4px;">${escHtml(vehTxt)}</div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">Placa</div><div style="font-weight:700;font-family:'DM Mono',monospace;">${escHtml(insp['Placa']||'—')}</div></div>
-          <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">Fecha</div><div>${escHtml(insp['Fecha']||'—')} ${escHtml(insp['Hora']||'')}</div></div>
-          <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">Vehículo</div><div>${escHtml(insp['Marca']||'')} ${escHtml(insp['Modelo']||'')}</div></div>
-          <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">Kilometraje</div><div>${escHtml(insp['Kilometraje actual']||'—')}</div></div>
-          <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">Inspector</div><div>${escHtml(insp['Nombre Inspector']||'—')}</div></div>
-          <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">Conductor</div><div>${escHtml(insp['Conductor del Día']||'—')}</div></div>
+        <button onclick="document.getElementById('hist-detalle').style.display='none';window.scrollTo(0,0);"
+          style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 24px;">
+          <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;">ID</div><div style="font-weight:700;font-family:'DM Mono',monospace;font-size:14px;">${escHtml(insp['ID_Inspeccion']||'—')}</div></div>
+          <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;">Fecha / Hora</div><div style="font-weight:700;">${escHtml(insp['Fecha']||'—')} ${escHtml(insp['Hora']||'')}</div></div>
+          <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;">Inspector</div><div style="font-weight:700;">${escHtml(insp['Nombre Inspector']||'—')}</div></div>
+          <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;">Cargo</div><div style="font-weight:700;">${escHtml(insp['Cargo']||'—')}</div></div>
+          <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;">Conductor</div><div style="font-weight:700;">${escHtml(insp['Conductor del Día']||'—')}</div></div>
+          <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;">Ciudad / Km</div><div style="font-weight:700;">${escHtml(ciudadKm)}</div></div>
         </div>
         ${nivelCargaHTML}
       </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-icon">📄</span><span class="card-title">Documentos</span></div>
+      <div class="card-body">${docsHTML}</div>
     </div>
 
     <div class="card">
@@ -1869,26 +1919,9 @@ function verDetalleInspeccion(idx){
       <div class="card-body">${checkHTML}</div>
     </div>
 
-    ${hasMarks ? '<div class="card"><div class="card-header"><span class="card-icon">🗺️</span><span class="card-title">Mapa de Daños</span></div><div class="card-body">'+mapHTML+'</div></div>' : ''}
-
     <div class="card">
-      <div class="card-header"><span class="card-icon">✍️</span><span class="card-title">Firmas</span></div>
-      <div class="card-body">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div>
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Inspector</div>
-            <div style="border:1.5px solid var(--border);border-radius:8px;padding:8px;min-height:100px;display:flex;align-items:center;justify-content:center;background:#fff;">
-              ${firmaImgHTML(firmaInsp)}
-            </div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Conductor</div>
-            <div style="border:1.5px solid var(--border);border-radius:8px;padding:8px;min-height:100px;display:flex;align-items:center;justify-content:center;background:#fff;">
-              ${firmaImgHTML(firmaCond)}
-            </div>
-          </div>
-        </div>
-      </div>
+      <div class="card-header"><span class="card-icon">🗺️</span><span class="card-title">Mapa de Daños</span></div>
+      <div class="card-body">${mapaAlwaysHTML}</div>
     </div>
 
     <div class="card">
@@ -1903,8 +1936,28 @@ function verDetalleInspeccion(idx){
           ${resEmoji} ${resultado}
         </div>
         ${observaciones
-          ? '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Observaciones</div><div style="padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:14px;line-height:1.5;">'+escHtml(observaciones)+'</div>'
-          : '<div style="color:var(--muted);font-size:14px;text-align:center;font-style:italic;">Sin observaciones</div>'}
+          ? '<div style="padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:14px;line-height:1.5;">'+escHtml(observaciones)+'</div>'
+          : '<div style="color:var(--muted);font-size:14px;">Sin observaciones</div>'}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-icon">✍️</span><span class="card-title">Firmas</span></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Inspector</div>
+            <div style="border:1.5px solid var(--border);border-radius:8px;padding:8px;min-height:120px;display:flex;align-items:center;justify-content:center;background:#fff;">
+              ${firmaImgHTML(firmaInsp)}
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Conductor</div>
+            <div style="border:1.5px solid var(--border);border-radius:8px;padding:8px;min-height:120px;display:flex;align-items:center;justify-content:center;background:#fff;">
+              ${firmaImgHTML(firmaCond)}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1917,7 +1970,7 @@ function verDetalleInspeccion(idx){
   `;
 
   det.scrollIntoView({behavior:'smooth',block:'start'});
-  if(hasMarks) setTimeout(function(){ renderHistMarks(parsedMarks); }, 100);
+  setTimeout(function(){ renderHistMarks(parsedMarks); }, 100);
 }
 
 function mostrarExito(id, fotoUrl, fotoNombre){
